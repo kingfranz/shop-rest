@@ -30,21 +30,23 @@
 (defn get-list
 	[listid]
 	{:pre [(q-valid? :shop/_id listid)]}
-	(->> (mc-find-one-as-map "get-list" lists {:_id listid})
-      	 (s/assert :shop/list)
-      	 (ring/response)))
+	(if-let [result (mc-find-one-as-map "get-list" lists {:_id listid})]
+      	(-> result
+            (s/assert :shop/list)
+      	 	(ring/response))
+        (ring/not-found)))
 
 (defn get-lists
 	[]
 	(->> (mc-find-maps "get-lists" lists)
-      	 (s/assert :shop/lists)
-      	 (ring/response)))
+       	 (s/assert :shop/lists)
+    	 (ring/response)))
 
 (defn get-list-names
 	[]
 	(->> (mc-find-maps "get-list-names" lists {} {:_id true :entryname true})
-      	 (s/assert :shop/strings)
-         (ring/response)))
+         (s/assert :shop/strings)
+      	 (ring/response)))
 
 (defn new-list
 	[entry]
@@ -68,11 +70,12 @@
 	  :let [np (some->> mlist :parent :parent)]
 	  :when (= (some->> mlist :parent :_id) list-id)]
 		(mc-update-by-id "delete-list" lists (:_id mlist) {$set {:parent np}}))
- 	{:status 204})
+ 	(-> (ring/response {})
+        (ring/status 204)))
 
 (defn get-lists-with-count
 	[]
-	(ring/response (mc-aggregate "get-lists-with-count" lists
+	(let [result (mc-aggregate "get-lists-with-count" lists
 		[{$project {:_id true
 		 		    :entryname true
 		 		    :parent true
@@ -84,7 +87,10 @@
 					           			:input "$items"
 					                    :as "item"
 					                    :cond {$not [{$gt ["$$item.finished" nil]}]}}}}
-					           0]}}}])))
+					           0]}}}])]
+      	(->> result
+             ;(s/assert :shop/strings)
+      	 	 (ring/response))))
 
 (defn finish-list-item
 	[list-id item-id]
@@ -130,9 +136,11 @@
 (defn find-list-by-name
 	[e-name]
 	{:pre [(q-valid? :shop/string e-name)]}
-	(->> (mc-find-one-as-map "find-list-by-name" lists {:entryname e-name})
-         (s/assert :shop/list)
-         (ring/response)))
+	(if-let [result (mc-find-one-as-map "find-list-by-name" lists {:entryname e-name})]
+      	(->> result
+             (s/assert :shop/list)
+      	 	 (ring/response))
+        (ring/not-found)))
 
 (defn- find-item
 	[list-id item-id]
@@ -145,7 +153,9 @@
 (defn- list-id-exists?
 	[id]
 	{:pre [(q-valid? :shop/_id id)]}
-	(ring/response (= (get (mc-find-map-by-id "list-id-exists?" lists id {:_id true}) :_id) id)))
+	(-> (mc-find-map-by-id "list-id-exists?" lists id {:_id true})
+        (get :_id)
+        (= id)))
 
 (defn item->list
 	[list-id item-id num-of]

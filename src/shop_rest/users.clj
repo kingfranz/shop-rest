@@ -28,41 +28,41 @@
 
 (defn get-user
 	[uname]
- 	{:pre [(q-valid? :shop/username uname)]
-     :post [(q-valid? (s/nilable :shop/user-db) %)]}
-  	(log/trace "get-user")
+ 	{:pre [(q-valid? :shop/username uname)]}
+  	;(log/trace "get-user")
 	(let [udata (mc-find-one-as-map "get-user" users
 					{:username {$regex (str "^" (str/trim uname) "$") $options "i"}})]
 		(if (seq udata)
-			(-> udata
-				(update :roles #(->> % (map keyword) set))
-				(update :created str)
-    			(ring/response))
-   			{:status 404})))
+			(as-> udata $
+				  (update $ :roles #(->> % (map keyword) set))
+				  (update $ :created str)
+    			  (s/assert (s/nilable :shop/user-db) $)
+    			  (ring/response $))
+   			(ring/not-found))))
 
 ;;-----------------------------------------------------------------------------
 
 (defn get-user-by-id
 	[uid]
- 	{:pre [(q-valid? :shop/_id uid)]
-     :post [(q-valid? (s/nilable :shop/user-db) %)]}
-	(log/trace "get-user-by-id")
+ 	{:pre [(q-valid? :shop/_id uid)]}
+	;(log/trace "get-user-by-id")
 	(let [udata (mc-find-map-by-id "get-user-by-id" users uid)]
 		(if (seq udata)
-			(-> udata
-				(update :roles #(->> % (map keyword) set))
-				(update :created str)
-    			(ring/response))
-   			{:status 404})))
+			(as-> udata $
+				  (update $ :roles #(->> % (map keyword) set))
+				  (update $ :created str)
+    			  (s/assert (s/nilable :shop/user-db) $)
+    			  (ring/response $))
+   			(ring/not-found))))
 
 ;;-----------------------------------------------------------------------------
 
 (defn get-users
 	[]
- 	{:post [(q-valid? (s/* :shop/user-db) %)]}
-	(->> (mc-find-maps "get-users" users {})
+ 	(->> (mc-find-maps "get-users" users {})
 		 (map (fn [u] (update u :roles #(->> % (map keyword) set))))
 		 (map (fn [u] (update u :created str)))
+   		 (s/assert (s/* :shop/user-db))
    		 (ring/response)))
 
 ;;-----------------------------------------------------------------------------
@@ -88,8 +88,9 @@
 
 (defn create-user
 	[username passwd roles]
- 	{:pre [(q-valid? :shop/username username) (q-valid? :shop/password passwd) (q-valid? :shop/roles roles)]
-     :post [(q-valid? :shop/user-db %)]}
+ 	{:pre [(q-valid? :shop/username username)
+           (q-valid? :shop/password passwd)
+           (q-valid? :shop/roles roles)]}
 	(when (some? (get-user username))
 		(throw (ex-info "duplicate username" {:cause :username})))
 	(let [user (merge {:username (str/trim username)
@@ -102,7 +103,8 @@
 
 (defn set-user-password
 	[uid passwd]
- 	{:pre [(q-valid? :shop/_id uid) (q-valid? :shop/password passwd)]}
+ 	{:pre [(q-valid? :shop/_id uid)
+           (q-valid? :shop/password passwd)]}
 	(mc-update-by-id "set-user-password" users uid
 		{$set {:password (creds/hash-bcrypt (verify-passwd passwd))}})
  	(get-user-by-id uid))
@@ -111,7 +113,8 @@
 
 (defn set-user-roles
 	[uid roles]
- 	{:pre [(q-valid? :shop/_id uid) (q-valid? :shop/roles roles)]}
+ 	{:pre [(q-valid? :shop/_id uid)
+           (q-valid? :shop/roles roles)]}
 	(mc-update-by-id "set-user-roles" users uid
     	{$set {:roles roles}})
  	(get-user-by-id uid))
@@ -120,7 +123,9 @@
 
 (defn set-user-property
 	[uid prop-key prop-val]
- 	{:pre [(q-valid? :shop/_id uid) (q-valid? keyword? prop-key) (q-valid? map? prop-val)]}
+ 	{:pre [(q-valid? :shop/_id uid)
+           (q-valid? keyword? prop-key)
+           (q-valid? map? prop-val)]}
 	(mc-update-by-id "set-user-property" users uid
 		{$set {:properties {prop-key prop-val}}})
  	(get-user-by-id uid))

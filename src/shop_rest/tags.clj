@@ -28,19 +28,24 @@
 
 (defn get-tags
 	[]
-	{:post [(q-valid? :shop/tags %)]}
-	(ring/response (mc-find-maps "get-tags" tags)))
+	(->> (mc-find-maps "get-tags" tags)
+         (s/assert :shop/tags)
+         (ring/response)))
 
 (defn get-tag
 	[id]
-	{:pre [(q-valid? :shop/_id id)]
-	 :post [(q-valid? :shop/tag %)]}
-	(ring/response (mc-find-map-by-id "get-tag" tags id)))
+	{:pre [(q-valid? :shop/_id id)]}
+	(if-let [result (mc-find-map-by-id "get-tag" tags id)]
+   		(->> result
+          	 (s/assert :shop/tag)
+             (ring/response))
+     	(ring/not-found)))
 
 (defn get-tag-names
 	[]
-	{:post [(q-valid? :shop/strings %)]}
-	(ring/response (mc-find-maps "get-tag-names" tags {} {:_id true :entryname true})))
+	(->> (mc-find-maps "get-tag-names" tags {} {:_id true :entryname true})
+      	 (s/assert :shop/strings)
+         (ring/response)))
 
 (defn update-tag
 	[tag-id tag-name*]
@@ -70,7 +75,7 @@
 			(ring/response db-tag)
 			(do
 				(mc-insert "new-tag" tags new-tag)
-				(ring/response new-tag)))))
+				(get-tag (:_id new-tag))))))
 
 (defn add-tags
 	[tags*]
@@ -81,7 +86,8 @@
 	[id]
 	{:pre [(q-valid? :shop/_id id)]}
 	(mc-remove-by-id "delete-tag" tags id)
- 	{:status 204})
+ 	(-> (ring/response {})
+        (ring/status 204)))
 
 (defn delete-tag-all
 	[id]
@@ -92,4 +98,5 @@
 	(mc-update "delete-tag-all" menus {} {$pull {:tags {:_id id}}} {:multi true})
 	(mc-update "delete-tag-all" projects {} {$pull {:tags {:_id id}}} {:multi true})
 	(mc-update "delete-tag-all" items {} {$pull {:tags {:_id id}}} {:multi true})
-	{:status 204})
+	(-> (ring/response {})
+        (ring/status 204)))

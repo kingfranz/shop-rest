@@ -73,11 +73,16 @@
 
 (defn get-menus
 	[from to]
-	{:pre [(q-valid? :shop/date from) (q-valid? :shop/date to)]
-	 :post [(q-valid? :shop/x-menus %)]}
+	{:pre [(q-valid? :shop/date from)
+           (q-valid? :shop/date to)]}
 	(let [db-menus* (mc-find-maps "get-menus" menus {:date {$gte from $lt to}})
 		  db-menus  (map fix-date db-menus*)
 		  new-menus (set/difference (set (time-range from to (t/days 1)))
 		  	                        (set (map :date db-menus)))]
-		(ring/response (sort-by :date (concat db-menus (map (fn [dt] {:date dt}) new-menus))))))
+   		(->> new-menus
+          	 (map (fn [dt] {:date dt}))
+             (concat db-menus)
+             (sort-by :date)
+             (s/assert :shop/x-menus)
+			 (ring/response))))
 

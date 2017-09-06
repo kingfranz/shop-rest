@@ -36,19 +36,22 @@
 
 (defn get-recipes
 	[]
-	{:post [(q-valid? :shop/recipes %)]}
-	(ring/response (mc-find-maps "get-recipes" recipes)))
+	(->> (mc-find-maps "get-recipes" recipes)
+         (s/assert :shop/recipes)
+         (ring/response)))
 
 (defn get-recipe
 	[id]
-	{:pre [(q-valid? :shop/_id id)]
-	 :post [(q-valid? :shop/recipe %)]}
-	(ring/response (mc-find-one-as-map "get-recipe" recipes {:_id id})))
+	{:pre [(q-valid? :shop/_id id)]}
+	(if-let [result (mc-find-one-as-map "get-recipe" recipes {:_id id})]
+   		(->> result
+             (s/assert :shop/recipe)
+             (ring/response))
+     	(ring/not-found)))
 
 (defn new-recipe
 	[entry]
-	{:pre [(q-valid? :shop/recipe* entry)]
-	 :post [(q-valid? :shop/recipe %)]}
+	{:pre [(q-valid? :shop/recipe* entry)]}
 	(add-tags (:tags entry))
 	(let [entrynamelc (mk-enlc (:entryname entry))
 		  db-entry    (get-by-enlc recipes entrynamelc)
@@ -59,7 +62,7 @@
 			(ring/response db-entry)
 			(do
 				(mc-insert "new-recipe" recipes entry*)
-				(ring/response (get-recipe (:_id entry*)))))))
+				(get-recipe (:_id entry*))))))
 
 (defn update-recipe
 	[recipe*]
@@ -81,5 +84,5 @@
 				(mc-update "update-recipe" menus {:recipe._id (:_id recipe)}
 					{$set {:recipe (select-keys recipe [:_id :entryname])}}
 					{:multi true})))
-		(ring/response recipe)))
+		(get-recipe (:_id recipe))))
 

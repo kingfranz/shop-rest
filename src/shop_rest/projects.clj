@@ -30,8 +30,9 @@
 
 (defn get-projects
 	[]
-	{:post [(q-valid? :shop/projects %)]}
-	(ring/response (mc-find-maps "get-projects" projects {:cleared nil})))
+	(->> (mc-find-maps "get-projects" projects {:cleared nil})
+         (s/assert :shop/projects)
+         (ring/response)))
 
 (defn get-active-projects
 	[]
@@ -43,14 +44,16 @@
 
 (defn get-project
 	[id]
-	{:pre [(q-valid? :shop/_id id)]
-	 :post [(q-valid? :shop/project %)]}
-	(ring/response (mc-find-one-as-map "get-project" projects {:_id id})))
+	{:pre [(q-valid? :shop/_id id)]}
+	(if-let [result (mc-find-one-as-map "get-project" projects {:_id id})]
+   		(->> result
+             (s/assert :shop/project)
+             (ring/response))
+     	(ring/not-found)))
 
 (defn new-project
 	[entry]
-	{:pre [(q-valid? :shop/project* entry)]
-	 :post [(q-valid? :shop/project %)]}
+	{:pre [(q-valid? :shop/project* entry)]}
 	(add-tags (:tags entry))
 	(let [entry* (merge entry (mk-std-field))]
 		(mc-insert "new-project" projects entry*)
@@ -81,5 +84,6 @@
 		{:finished {$type "date"}}
 		{$set {:cleared (now)}}
 		{:multi true})
- 	{:status 204})
+ 	(-> (ring/response {})
+        (ring/status 204)))
 
